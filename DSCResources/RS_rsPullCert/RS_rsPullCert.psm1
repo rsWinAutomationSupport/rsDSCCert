@@ -11,13 +11,17 @@ Function Test-TargetResource {
   param (
     [parameter(Mandatory = $true)][string]$Name
   )
-  if((Get-ChildItem -Path Cert:\LocalMachine\Root\ | Where-Object -FilterScript {$_.Subject -eq $('CN=', $env:COMPUTERNAME -join '')}).Thumbprint -eq (Get-ChildItem -Path Cert:\LocalMachine\My\ | Where-Object -FilterScript {$_.Subject -eq $('CN=', $env:COMPUTERNAME -join '')}).Thumbprint) {
-    return $true
-  }
-  else {
+  if(((Get-ChildItem Cert:\LocalMachine\My, Cert:\LocalMachine\Root | ? subject -EQ ("CN=", $env:COMPUTERNAME -join '').Count) -le 1)) {
     return $false
   }
-
+  else {
+    if((Get-ChildItem -Path Cert:\LocalMachine\Root\ | Where-Object -FilterScript {$_.Subject -eq $('CN=', $env:COMPUTERNAME -join '')}).Thumbprint -eq (Get-ChildItem -Path Cert:\LocalMachine\My\ | Where-Object -FilterScript {$_.Subject -eq $('CN=', $env:COMPUTERNAME -join '')}).Thumbprint) {
+      return $true
+    }
+    else {
+      return $false
+    }
+  }
 }
 
 Function Set-TargetResource {
