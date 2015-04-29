@@ -45,6 +45,44 @@ Function Set-TargetResource {
   $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]'ReadWrite')
   $store.Add($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
   $store.Close()
+  ### Create follow up job to update LCM
+  Start-Job -Name NewLCM -ScriptBlock {
+    do {
+      Start-Sleep -Seconds 5
+    }
+    while((Get-DscLocalConfigurationManager).LCMState -ne "Ready")
+    function Set-LCM {
+@"
+      [DSCLocalConfigurationManager()]
+      Configuration LCM
+      {
+        Node $env:COMPUTERNAME
+        {
+          Settings {
+            AllowModuleOverwrite = 1
+            ConfigurationMode = 'ApplyAndAutoCorrect'
+            RefreshMode = 'Pull'
+            RebootNodeIfNeeded = 1
+            ConfigurationID = "$($nodeinfo.uuid)"
+          }
+          ConfigurationRepositoryWeb DSCHTTPS {
+            Name= 'DSCHTTPS'
+            ServerURL = "https://$($nodeinfo.PullServerName):$($nodeinfo.PullServerPort)/PSDSCPullServer.svc"
+            CertificateID = (Get-ChildItem Cert:\LocalMachine\Root | ? Subject -EQ "CN=$($nodeinfo.PullServerName)").Thumbprint
+            AllowUnsecureConnection = 0
+          } 
+        }
+      }
+      if( Test-Path ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) ) {
+        Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw | ConvertFrom-Json | Set-Variable -Name nodeinfo -Scope Global
+      }
+      LCM -OutputPath 'C:\Windows\Temp' -Verbose
+      Set-DscLocalConfigurationManager -Path 'C:\Windows\Temp' -Verbose
+"@ | Invoke-Expression -Verbose
+    }
+    Set-LCM
+    Update-DscConfiguration
+  } 
 }
 
 Export-ModuleMember -Function *-TargetResource
