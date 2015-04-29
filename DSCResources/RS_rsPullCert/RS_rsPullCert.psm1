@@ -11,7 +11,7 @@ Function Test-TargetResource {
   param (
     [parameter(Mandatory = $true)][string]$Name
   )
-  if(((Get-ChildItem Cert:\LocalMachine\My, Cert:\LocalMachine\Root | ? subject -EQ ("CN=", $env:COMPUTERNAME -join '').Count) -le 1)) {
+  if((((Get-ChildItem Cert:\LocalMachine\My\, Cert:\LocalMachine\Root\)  | ? subject -EQ ("CN=$env:COMPUTERNAME")).thumbprint).count -le 1) {
     return $false
   }
   else {
