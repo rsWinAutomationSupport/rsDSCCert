@@ -50,7 +50,7 @@ Function Set-TargetResource {
     do {
       Start-Sleep -Seconds 5
     }
-    while((Get-DscLocalConfigurationManager).LCMState -ne "Ready")
+    while((Get-DscLocalConfigurationManager).LCMState -ne "Idle")
     function Set-LCM {
 @"
       [DSCLocalConfigurationManager()]
