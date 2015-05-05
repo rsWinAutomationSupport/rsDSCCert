@@ -47,12 +47,12 @@ Function Set-TargetResource {
   $store.Close()
   ### Create follow up job to update LCM
   Start-Job -Name NewLCM -ScriptBlock {
-    do {
-      Start-Sleep -Seconds 5
-    }
-    while((Get-DscLocalConfigurationManager).LCMState -ne "Idle")
-    function Set-LCM {
-@"
+      do {
+          Start-Sleep -Seconds 5
+      }
+      while((Get-DscLocalConfigurationManager).LCMState -ne "Idle")
+      function Set-LCM {
+          @"
       [DSCLocalConfigurationManager()]
       Configuration LCM
       {
@@ -79,9 +79,10 @@ Function Set-TargetResource {
       LCM -OutputPath 'C:\Windows\Temp' -Verbose
       Set-DscLocalConfigurationManager -Path 'C:\Windows\Temp' -Verbose
 "@ | Invoke-Expression -Verbose
-    }
-    Set-LCM
-    Update-DscConfiguration
+      }
+      Set-LCM
+      Start-Sleep -Seconds 10
+      Update-DscConfiguration -Verbose -Wait
   } 
 }
 
