@@ -66,7 +66,6 @@ Function Set-TargetResource {
             ConfigurationID = "$($nodeinfo.uuid)"
           }
           ConfigurationRepositoryWeb DSCHTTPS {
-            Name= 'DSCHTTPS'
             ServerURL = "https://$($nodeinfo.PullServerName):$($nodeinfo.PullServerPort)/PSDSCPullServer.svc"
             CertificateID = (Get-ChildItem Cert:\LocalMachine\Root | ? Subject -EQ "CN=$($nodeinfo.PullServerName)").Thumbprint
             AllowUnsecureConnection = 0
