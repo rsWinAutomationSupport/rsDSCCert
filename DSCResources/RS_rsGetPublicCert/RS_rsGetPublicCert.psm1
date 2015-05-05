@@ -52,6 +52,7 @@ Function Set-TargetResource {
       }
       while((Get-DscLocalConfigurationManager).LCMState -ne "Idle")
       function Set-LCM {
+      $nodeinfo = Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw | ConvertFrom-Json
           @"
       [DSCLocalConfigurationManager()]
       Configuration LCM
