@@ -31,7 +31,7 @@ Feature Additions
 Examples
 --------
 
-	- Default client DSC config
+Default client DSC config
 <pre><code>
 rsGetPublicCert getPullServerCert
 {
@@ -39,7 +39,7 @@ rsGetPublicCert getPullServerCert
 }
 </code></pre>
 
-	- Updating PullServerAddress and Port
+Updating PullServerAddress and Port
 <pre><code>
 rsGetPublicCert getPullServerCert
 {
