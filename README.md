@@ -23,3 +23,28 @@ Feature Additions
 
 	- Additional Set logic accounting for replaced PullServers
 		- Will aquire new PullServer Hostname and Public Cert from the HTTPS endpoint.
+
+	-Eliminated unneeded Name variable, replaced with Ensure boolean.
+
+
+
+Examples
+--------
+
+	- Default client DSC config
+		-<pre>
+			rsGetPublicCert getPullServerCert
+			{
+				Ensure = 'Present'
+			}
+		 </pre>
+
+	- Updating PullServerAddress and Port
+		-<pre>
+			rsGetPublicCert getPullServerCert
+			{
+				Ensure = 'Present'
+				PullServerAddress = 'pull.mydomain.example'
+				PullServerPort = 9090
+			}
+		 </pre>
