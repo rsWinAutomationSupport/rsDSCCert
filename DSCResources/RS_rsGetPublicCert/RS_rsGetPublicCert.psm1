@@ -1,16 +1,29 @@
-﻿function Update-HOSTS {
+﻿function Get-NodeInfo {
+$nodeinfo = Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
+if(!($nodeinfo)){ $nodeinfo = Get-Content 'C:\Windows\Temp\nodeinfo.json' -Raw | ConvertFrom-Json }
+return $nodeinfo
+}
 
-$nodeinfo = Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw | ConvertFrom-Json
+
+
+
+function Update-HOSTS {
+
+$nodeinfo = Get-NodeInfo
+      
 $hostfile = (Get-Content -Path 'C:\Windows\system32\drivers\etc\hosts').where({$_ -notmatch $($nodeinfo.PullServerIP) -AND $_ -notmatch $($nodeinfo.PullServerName)})
 $hostfile += $( $($nodeinfo.PullServerIP)+ "`t`t" + $($nodeinfo.PullServerName))
+
 Set-Content -Path 'C:\Windows\System32\Drivers\etc\hosts' -Value $hostfile -Force
 
 }
 
 
+
+
 function Create-LCMJob {
 
-$nodeinfo = Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw | ConvertFrom-Json
+$nodeinfo = Get-NodeInfo
 
 $argument = @"
     Configuration LCM
@@ -33,6 +46,7 @@ $argument = @"
                
         }
     }
+    Stop-DscConfiguration -Force -ErrorAction SilentlyContinue
     LCM -OutputPath 'C:\Windows\Temp' -Verbose
     Set-DscLocalConfigurationManager -Path 'C:\Windows\Temp' -Verbose
     Start-DscConfiguration -UseExisting -Force
@@ -44,156 +58,175 @@ $timer = (Get-Date).AddMinutes(2)
 $action = New-ScheduledTaskAction -Execute "$PSHOME\powershell.exe" -Argument $argument
 $trigger = New-ScheduledTaskTrigger -At $timer -Once
 
-if(Get-ScheduledTask -TaskName 'Update-LCM' -ErrorAction SilentlyContinue){ Get-ScheduledTask -TaskName 'Update-LCM' | Unregister-ScheduledTask -Confirm:$false}
+if(Get-ScheduledTask -TaskName 'Update-LCM' -ErrorAction SilentlyContinue){ Get-ScheduledTask -TaskName 'Update-LCM' | Unregister-ScheduledTask -Confirm:$false }
 
-Register-ScheduledTask -TaskName 'Update-LCM' -User 'System' -Trigger $trigger -Action $action -ErrorAction Continue
+Register-ScheduledTask -TaskName 'Update-LCM' -User 'System' -Trigger $trigger -Action $action
 
 }
-
-
 
 
 
 
 Function Get-TargetResource {
   param (
-    [parameter(Mandatory = $true)][string]$Name,
+    [parameter(Mandatory = $true)]
+    [string] $Ensure,
     [string] $PullServerAddress,
     [string] $PullServerPort
   )
   
-  $nodeinfo = Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw | ConvertFrom-Json
+  $nodeinfo = Get-NodeInfo
   
   if(!($PullServerAddress)){ $PullServerAddress = $nodeinfo.PullServerAddress }
   if(!($PullServerPort)){ $PullServerAddress = $nodeinfo.PullServerPort }
   
   
   return @{
-    'Name' = $Name
+    'Ensure' = $Ensure
     'PullServerAddress' = $PullServerAddress
     'PullServerPort' = $PullServerPort
     
   }
 }
 
+
+
+
 Function Test-TargetResource {
   param (
-    [parameter(Mandatory = $true)][string]$Name,
+    [parameter(Mandatory = $true)]
+    [string] $Ensure,
     [string] $PullServerAddress,
     [string] $PullServerPort
   )
   
-  #First check if PullServer Address or Port have changed compated to nodeinfo.json locally
-  $nodeinfo = Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw | ConvertFrom-Json
+  if($Ensure -eq 'Present'){
   
-  if($PullServerAddress){
-        if($PullServerAddress -ne $nodeinfo.PullServerAddress) {return $false}
-   }
+          #First check if PullServer Address or Port have changed compated to nodeinfo.json locally
+          $nodeinfo = Get-NodeInfo
+  
+          if($PullServerAddress){
+                if($PullServerAddress -ne $nodeinfo.PullServerAddress) {return $false}
+           }
 
-   if($PullServerPort){
-        if($PullServerPort -ne $nodeinfo.PullServerPort) {return $false}
-   }
+           if($PullServerPort){
+                if($PullServerPort -ne $nodeinfo.PullServerPort) {return $false}
+           }
 
-  #If PullServer Address or Port have not changed, validate that the current PullServer public cert is installed locally
-  $uri = "https://$($nodeinfo.PullServerIP):$($nodeinfo.PullServerPort)"
-  $webRequest = [Net.WebRequest]::Create($uri)
-  try { $webRequest.GetResponse() } catch {}
-  $cert = $webRequest.ServicePoint.Certificate
-  if((Get-ChildItem Cert:\LocalMachine\Root).Thumbprint -contains ($cert.GetCertHashString())) {
-    return $true
-  }
-  else {
-    return $false
-  }
+          #If PullServer Address or Port have not changed, validate that the current PullServer public cert is installed locally
+          $uri = "https://$($nodeinfo.PullServerIP):$($nodeinfo.PullServerPort)"
+          $webRequest = [Net.WebRequest]::Create($uri)
+          try { $webRequest.GetResponse() } catch {}
+          $cert = $webRequest.ServicePoint.Certificate
+          if((Get-ChildItem Cert:\LocalMachine\Root).Thumbprint -contains ($cert.GetCertHashString())) {
+            return $true
+          }
+          else {
+            return $false
+          }
+    }
 
+    else { Write-Verbose -Message "Ensure set to Absent, skipping tests, no action to take" }
 }
 
 Function Set-TargetResource {
   param (
-    [parameter(Mandatory = $true)][string]$Name,
+    [parameter(Mandatory = $true)]
+    [string] $Ensure,
     [string] $PullServerAddress,
     [string] $PullServerPort
   )
   
-  #Update PullServer Address and Port in $nodeinfo if changed
-  $nodeinfo = Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw | ConvertFrom-Json
+ 
+          #Update PullServer Address and Port in $nodeinfo if changed
+          $nodeinfo = Get-NodeInfo
   
-  if($PullServerAddress){
-        $nodeinfo.PullServerAddress = $PullServerAddress
-  }
+          if($PullServerAddress){
+                $nodeinfo.PullServerAddress = $PullServerAddress
+          }
 
-  if($PullServerPort){
-        $nodeinfo.PullServerPort = $PullServerPort
-  }
+          if($PullServerPort){
+                $nodeinfo.PullServerPort = $PullServerPort
+          }
   
 
-  #If PullServerAddress is a name, narrow down to a specific IP. Private networks are prioritized.
-  if($nodeinfo.PullServerAddress -match '[a-zA-Z]'){
+          #If PullServerAddress is a name, narrow down to a specific IP. Private networks are prioritized.
+          if($nodeinfo.PullServerAddress -match '[a-zA-Z]'){
         
         
-                $PullServerPossibleIP = Resolve-DnsName -Name $nodeinfo.PullServerAddress | Where {$_.IP4Address} | Select-Object -ExpandProperty IP4Address
+                        $PullServerPossibleIP = Resolve-DnsName -Name $nodeinfo.PullServerAddress | Where {$_.IP4Address} | Select-Object -ExpandProperty IP4Address
 
 
-                $PullServerValidIPs = @()
+                        $PullServerValidIPs = @()
 
-                foreach($IP in $PullServerPossibleIP){
+                        foreach($IP in $PullServerPossibleIP){
 
-                    $check =  Test-NetConnection $IP -Port $nodeinfo.PullServerPort
+                            $check =  Test-NetConnection $IP -Port $nodeinfo.PullServerPort
 
-                    if($check.TcpTestSucceeded){$PullServerValidIPs += @{$IP = $check.NetworkIsolationContext}}
+                            if($check.TcpTestSucceeded){$PullServerValidIPs += @{$IP = $check.NetworkIsolationContext}}
+                        }
+
+
+                        if($PullServerValidIPs.values -contains 'Private Network'){
+                            $nodeinfo.PullServerIP = ($PullServerValidIPs | Where {$_.values -contains 'Private Network'}).keys | Get-Random
+                        }
+                        else{
+                            $nodeinfo.PullServerIP = $PullServerValidIPs.keys | Get-Random
+                        }
+        
+            }
+
+            #If PullServerAddress contains only an IP, set the PullServer Address variable to the IP entered
+            else{
+                    $nodeinfo.PullServerIP = $nodeinfo.PullServerAddress
                 }
 
 
-                if($PullServerValidIPs.values -contains 'Private Network'){
-                    $nodeinfo.PullServerIP = ($PullServerValidIPs | Where {$_.values -contains 'Private Network'}).keys | Get-Random
-                }
-                else{
-                    $nodeinfo.PullServerIP = $PullServerValidIPs.keys | Get-Random
-                }
-        
-    }
+            
+            
+            #Re-writing nodeinfo.json locally
 
-    #If PullServerAddress contains only an IP, set the PullServer Address variable to the IP entered
-    else{
-            $nodeinfo.PullServerIP = $nodeinfo.PullServerAddress
-        }
-
+            $nodeinfopath = [Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()
+            if(!($nodeinfopath)){ $nodeinfopath = 'C:\Windows\Temp\nodeinfo.json' }
+            
+            Set-Content -Path $nodeinfopath -Value ($nodeinfo | ConvertTo-Json -Depth 2)
     
 
     
 
-    #Attempt to get the PullServer's hostname from the certificate attached to the endpoint.
+            #Attempt to get the PullServer's hostname from the certificate attached to the endpoint.
    
-    $uri = "https://$($nodeinfo.PullServerIP):$($nodeinfo.PullServerPort)"
+            $uri = "https://$($nodeinfo.PullServerIP):$($nodeinfo.PullServerPort)"
     
-    $webRequest = [Net.WebRequest]::Create($uri)
+            $webRequest = [Net.WebRequest]::Create($uri)
     
-    try {$webRequest.GetResponse()}catch {}
+            try {$webRequest.GetResponse()}catch {}
     
-    if($webRequest.ServicePoint.Certificate.Subject){
-        $nodeinfo.PullServerName = $webRequest.ServicePoint.Certificate.Subject -replace '^CN\=','' -replace ',.*$',''
-    }
+            if($webRequest.ServicePoint.Certificate.Subject){
+                $nodeinfo.PullServerName = $webRequest.ServicePoint.Certificate.Subject -replace '^CN\=','' -replace ',.*$',''
+            }
     
-    Write-Verbose "Re-writing nodeinfo.json locally"
-    Set-Content -Path ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Value ($nodeinfo | ConvertTo-Json -Depth 2)
+            Write-Verbose "Re-writing nodeinfo.json locally"
+            Set-Content -Path ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Value ($nodeinfo | ConvertTo-Json -Depth 2)
 
 
-    #
-    if($webRequest.ServicePoint.Certificate){            
-        $cert = $webRequest.ServicePoint.Certificate
-        Write-Verbose "Adding PullServer Root Certificate to Cert:\LocalMachine\Root"
-        Get-ChildItem -Path "Cert:\LocalMachine\Root\" | ? Subject -EQ $("CN=", $nodeinfo.PullServerName -join '') | Remove-Item
-        $store = Get-Item Cert:\LocalMachine\Root
-        $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]'ReadWrite')
-        $store.Add($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
-        $store.Close()
-    }
+            #
+            if($webRequest.ServicePoint.Certificate){            
+                $cert = $webRequest.ServicePoint.Certificate
+                Write-Verbose "Adding PullServer Root Certificate to Cert:\LocalMachine\Root"
+                Get-ChildItem -Path "Cert:\LocalMachine\Root\" | ? Subject -EQ $("CN=", $nodeinfo.PullServerName -join '') | Remove-Item
+                $store = Get-Item Cert:\LocalMachine\Root
+                $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]'ReadWrite')
+                $store.Add($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+                $store.Close()
+            }
 
-    #Ensure HOSTS file contains correct PullServerName and IP
-    Update-HOSTS
+            #Ensure HOSTS file contains correct PullServerName and IP
+            Update-HOSTS
 
-    #Ensure LCM is configured correctly. Will create a Scheduled Task to set the LCM after current DSC run finishes
-    Create-LCMJob
+            #Ensure LCM is configured correctly. Will create a Scheduled Task to set the LCM after current DSC run finishes
+            Create-LCMJob
+    
 }
 
 Export-ModuleMember -Function *-TargetResource
