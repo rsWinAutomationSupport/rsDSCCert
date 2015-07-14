@@ -32,19 +32,19 @@ Examples
 --------
 
 	- Default client DSC config
-		-<pre><code>
-			rsGetPublicCert getPullServerCert
-			{
-				Ensure = 'Present'
-			}
-		 </code></pre>
+<pre><code>
+rsGetPublicCert getPullServerCert
+{
+	Ensure = 'Present'
+}
+</code></pre>
 
 	- Updating PullServerAddress and Port
-		-<pre><code>
-			rsGetPublicCert getPullServerCert
-			{
-				Ensure = 'Present'
-				PullServerAddress = 'pull.mydomain.example'
-				PullServerPort = 9090
-			}
-		 </code></pre>
+<pre><code>
+rsGetPublicCert getPullServerCert
+{
+	Ensure = 'Present'
+	PullServerAddress = 'pull.mydomain.example'
+	PullServerPort = 9090
+}
+</code></pre>
