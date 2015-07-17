@@ -8,11 +8,19 @@ return $nodeinfo
 
 
 function Update-HOSTS {
+param(
+$oldName,
+$oldIP
+)
+
 
 $nodeinfo = Get-NodeInfo
-      
-$hostfile = (Get-Content -Path 'C:\Windows\system32\drivers\etc\hosts').where({$_ -notmatch $($nodeinfo.PullServerIP) -AND $_ -notmatch $($nodeinfo.PullServerName)})
-$hostfile += $( $($nodeinfo.PullServerIP)+ "`t`t" + $($nodeinfo.PullServerName))
+
+if(!($oldName)){ $oldName = $nodeinfo.PullServerName }
+if(!($oldIP)){ $oldIP = $nodeinfo.PullServerIP }
+
+#Select content of HOSTS file and replace anything matching the old PullServerName or IP   
+$hostfile = (Get-Content -Path 'C:\Windows\system32\drivers\etc\hosts') -replace "$oldName","$nodeinfo.PullServerName" -replace "$oldIP","$nodeinfo.PullServerIP"    #.where({$_ -notmatch $($nodeinfo.PullServerIP) -AND $_ -notmatch $($nodeinfo.PullServerName)})
 
 Set-Content -Path 'C:\Windows\System32\Drivers\etc\hosts' -Value $hostfile -Force
 
@@ -102,21 +110,23 @@ Function Test-TargetResource {
   
   if($Ensure -eq 'Present'){
   
-          #First check if PullServer Address or Port have changed compated to nodeinfo.json locally
+          #First check if PullServer Address or Port have changed compared to nodeinfo.json locally
           $nodeinfo = Get-NodeInfo
   
           if($PullServerAddress){
                 if($PullServerAddress -ne $nodeinfo.PullServerAddress) {return $false}
-           }
+          }
 
-           if($PullServerPort){
+          if($PullServerPort){
                 if($PullServerPort -ne $nodeinfo.PullServerPort) {return $false}
-           }
+          }
 
           #If PullServer Address or Port have not changed, validate that the current PullServer public cert is installed locally
-          $uri = "https://$($nodeinfo.PullServerIP):$($nodeinfo.PullServerPort)"
+          $uri = "https://$($nodeinfo.PullServerName):$($nodeinfo.PullServerPort)"
           $webRequest = [Net.WebRequest]::Create($uri)
-          try { $webRequest.GetResponse() } catch {}
+          
+          #catch returns false in case connection times out, this will reset HOSTS entry in Set function
+          try { $webRequest.GetResponse() } catch { return $false }
           $cert = $webRequest.ServicePoint.Certificate
           if((Get-ChildItem Cert:\LocalMachine\Root).Thumbprint -contains ($cert.GetCertHashString())) {
             return $true
@@ -137,94 +147,56 @@ Function Set-TargetResource {
     [int] $PullServerPort
   )
   
- 
-          #Update PullServer Address and Port in $nodeinfo if changed
-          $nodeinfo = Get-NodeInfo
-  
-          if($PullServerAddress){
-                $nodeinfo.PullServerAddress = $PullServerAddress
-          }
-
-          if($PullServerPort){
+        
+            #Update PullServer Address and Port in $nodeinfo if changed
+                        
+            $nodeinfo = Get-NodeInfo
+          
+            if($PullServerPort){
                 $nodeinfo.PullServerPort = $PullServerPort
-          }
-  
-
-          #If PullServerAddress is a name, narrow down to a specific IP. Private networks are prioritized.
-          if($nodeinfo.PullServerAddress -match '[a-zA-Z]'){
-        
-        
-                        $PullServerPossibleIP = Resolve-DnsName -Name $nodeinfo.PullServerAddress | Where {$_.IP4Address} | Select-Object -ExpandProperty IP4Address
-
-
-                        $PullServerValidIPs = @()
-
-                        foreach($IP in $PullServerPossibleIP){
-
-                            $check =  Test-NetConnection $IP -Port $nodeinfo.PullServerPort
-
-                            if($check.TcpTestSucceeded){$PullServerValidIPs += @{$IP = $check.NetworkIsolationContext}}
-                        }
-
-
-                        if($PullServerValidIPs.values -contains 'Private Network'){
-                            $nodeinfo.PullServerIP = ($PullServerValidIPs | Where {$_.values -contains 'Private Network'}).keys | Get-Random
-                        }
-                        else{
-                            $nodeinfo.PullServerIP = $PullServerValidIPs.keys | Get-Random
-                        }
-        
             }
+          
 
-            #If PullServerAddress contains only an IP, set the PullServer Address variable to the IP entered
-            else{
+            if($PullServerAddress){
+                $nodeinfo.PullServerAddress = $PullServerAddress
+                
+                if($nodeinfo.PullServerAddress -match '[a-zA-Z]'){ $nodeinfo.PullServerName = $nodeinfo.PullServerAddress }
+                         
+                #If PullServerAddress contains only an IP, set the PullServerIP variable to the IP entered
+                #Attempt to get the PullServer's hostname from the certificate attached to the endpoint.
+                #Ensure PullServer endpoint cert is installed locally.
+                #ensure HOSTS file contains correct PullServerName and IP
+                else{ 
+                    
+                    $oldName = $nodeinfo.PullServerName
+                    $oldIP = $nodeinfo.PullServerIP
                     $nodeinfo.PullServerIP = $nodeinfo.PullServerAddress
+
+                    $uri = "https://$($nodeinfo.PullServerIP):$($nodeinfo.PullServerPort)"
+    
+                    $webRequest = [Net.WebRequest]::Create($uri)
+    
+                    try {$webRequest.GetResponse()}catch {}
+    
+                    $nodeinfo.PullServerName = $webRequest.ServicePoint.Certificate.Subject -replace '^CN\=','' -replace ',.*$',''
+            
+                    $cert = $webRequest.ServicePoint.Certificate
+                    Write-Verbose "Adding PullServer Root Certificate to Cert:\LocalMachine\Root"
+                    Get-ChildItem -Path "Cert:\LocalMachine\Root\" | ? Subject -EQ $("CN=", $nodeinfo.PullServerName -join '') | Remove-Item
+                    $store = Get-Item Cert:\LocalMachine\Root
+                    $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]'ReadWrite')
+                    $store.Add($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+                    $store.Close()
+
+                    Update-HOSTS -oldName $oldName -oldIP $oldIP
                 }
-
-
-            
-            
-            #Re-writing nodeinfo.json locally
-
-            $nodeinfopath = [Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()
-            if(!($nodeinfopath)){ $nodeinfopath = 'C:\Windows\Temp\nodeinfo.json' }
-            
-            Set-Content -Path $nodeinfopath -Value ($nodeinfo | ConvertTo-Json -Depth 2)
-    
-
-    
-
-            #Attempt to get the PullServer's hostname from the certificate attached to the endpoint.
-   
-            $uri = "https://$($nodeinfo.PullServerIP):$($nodeinfo.PullServerPort)"
-    
-            $webRequest = [Net.WebRequest]::Create($uri)
-    
-            try {$webRequest.GetResponse()}catch {}
-    
-            if($webRequest.ServicePoint.Certificate.Subject){
-                $nodeinfo.PullServerName = $webRequest.ServicePoint.Certificate.Subject -replace '^CN\=','' -replace ',.*$',''
             }
-    
-            Write-Verbose "Re-writing nodeinfo.json locally"
-            Set-Content -Path ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Value ($nodeinfo | ConvertTo-Json -Depth 2)
+          
 
+            
+            
 
-            #
-            if($webRequest.ServicePoint.Certificate){            
-                $cert = $webRequest.ServicePoint.Certificate
-                Write-Verbose "Adding PullServer Root Certificate to Cert:\LocalMachine\Root"
-                Get-ChildItem -Path "Cert:\LocalMachine\Root\" | ? Subject -EQ $("CN=", $nodeinfo.PullServerName -join '') | Remove-Item
-                $store = Get-Item Cert:\LocalMachine\Root
-                $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]'ReadWrite')
-                $store.Add($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
-                $store.Close()
-            }
-
-            #Ensure HOSTS file contains correct PullServerName and IP
-            Update-HOSTS
-
-            #Ensure LCM is configured correctly. Will create a Scheduled Task to set the LCM after current DSC run finishes
+            #Ensure LCM is configured correctly. Will create a Scheduled Task to set the LCM 2 minutes after current DSC run finishes
             Create-LCMJob
     
 }
