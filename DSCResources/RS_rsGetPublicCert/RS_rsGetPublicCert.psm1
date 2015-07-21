@@ -77,6 +77,7 @@ Register-ScheduledTask -TaskName 'Update-LCM' -User 'System' -Trigger $trigger -
 
 Function Get-TargetResource {
   param (
+    [parameter(Mandatory = $true)]
     [ValidateSet("Present","Absent")]
     [string] $Ensure,
     [string] $PullServerAddress,
@@ -102,6 +103,7 @@ Function Get-TargetResource {
 
 Function Test-TargetResource {
   param (
+    [parameter(Mandatory = $true)]
     [ValidateSet("Present","Absent")]
     [string] $Ensure,
     [string] $PullServerAddress,
@@ -141,6 +143,7 @@ Function Test-TargetResource {
 
 Function Set-TargetResource {
   param (
+    [parameter(Mandatory = $true)]
     [ValidateSet("Present","Absent")]
     [string] $Ensure,
     [string] $PullServerAddress,
