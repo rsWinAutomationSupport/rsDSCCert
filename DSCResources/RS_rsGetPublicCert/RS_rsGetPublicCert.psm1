@@ -121,6 +121,7 @@ Function Test-TargetResource {
             if($PullServerPort -ne $nodeinfo.PullServerPort) {return $false}
         }
 
+        <#
         #If PullServer Address or Port have not changed, validate that the current PullServer public cert is installed locally
         $uri = "https://$($nodeinfo.PullServerName):$($nodeinfo.PullServerPort)"
         $webRequest = [Net.WebRequest]::Create($uri)
@@ -134,6 +135,9 @@ Function Test-TargetResource {
         else {
         return $false
         }
+        #>
+        return $false
+
 }
 
 
