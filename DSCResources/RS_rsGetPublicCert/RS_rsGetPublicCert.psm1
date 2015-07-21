@@ -77,9 +77,7 @@ Register-ScheduledTask -TaskName 'Update-LCM' -User 'System' -Trigger $trigger -
 
 Function Get-TargetResource {
   param (
-    [parameter(Mandatory)]
-    [ValidateSet("Present","Absent")]
-    [string] $Ensure,
+    [parameter(Mandatory)][string] $Name,
     [string] $PullServerAddress,
     [int] $PullServerPort
   )
@@ -91,7 +89,7 @@ Function Get-TargetResource {
   
   
   return @{
-    'Ensure' = $Ensure
+    'Name' = $Name
     'PullServerAddress' = $PullServerAddress
     'PullServerPort' = $PullServerPort
     
@@ -103,49 +101,42 @@ Function Get-TargetResource {
 
 Function Test-TargetResource {
   param (
-    [parameter(Mandatory)]
-    [ValidateSet("Present","Absent")]
-    [string] $Ensure,
+    [parameter(Mandatory)][string] $Name,
     [string] $PullServerAddress,
     [int] $PullServerPort
   )
   
-  if($Ensure -eq 'Present'){
+    
+        #First check if PullServer Address or Port have changed compared to nodeinfo.json locally
+        $nodeinfo = Get-NodeInfo
   
-          #First check if PullServer Address or Port have changed compared to nodeinfo.json locally
-          $nodeinfo = Get-NodeInfo
-  
-          if($PullServerAddress){
-                if($PullServerAddress -ne $nodeinfo.PullServerAddress) {return $false}
-          }
+        if($PullServerAddress){
+            if($PullServerAddress -ne $nodeinfo.PullServerAddress) {return $false}
+        }
 
-          if($PullServerPort){
-                if($PullServerPort -ne $nodeinfo.PullServerPort) {return $false}
-          }
+        if($PullServerPort){
+            if($PullServerPort -ne $nodeinfo.PullServerPort) {return $false}
+        }
 
-          #If PullServer Address or Port have not changed, validate that the current PullServer public cert is installed locally
-          $uri = "https://$($nodeinfo.PullServerName):$($nodeinfo.PullServerPort)"
-          $webRequest = [Net.WebRequest]::Create($uri)
+        #If PullServer Address or Port have not changed, validate that the current PullServer public cert is installed locally
+        $uri = "https://$($nodeinfo.PullServerName):$($nodeinfo.PullServerPort)"
+        $webRequest = [Net.WebRequest]::Create($uri)
           
-          #catch returns false in case connection times out, this will reset HOSTS entry in Set function
-          try { $webRequest.GetResponse() } catch { return $false }
-          $cert = $webRequest.ServicePoint.Certificate
-          if((Get-ChildItem Cert:\LocalMachine\Root).Thumbprint -contains ($cert.GetCertHashString())) {
-            return $true
-          }
-          else {
-            return $false
-          }
-    }
-
-    else { Write-Verbose -Message "Ensure set to Absent, skipping tests, no action to take" }
+        #catch returns false in case connection times out, this will reset HOSTS entry in Set function
+        try { $webRequest.GetResponse() } catch { return $false }
+        $cert = $webRequest.ServicePoint.Certificate
+        if((Get-ChildItem Cert:\LocalMachine\Root).Thumbprint -contains ($cert.GetCertHashString())) {
+        return $true
+        }
+        else {
+        return $false
+        }
 }
+
 
 Function Set-TargetResource {
   param (
-    [parameter(Mandatory)]
-    [ValidateSet("Present","Absent")]
-    [string] $Ensure,
+    [parameter(Mandatory)][string] $Name,
     [string] $PullServerAddress,
     [int] $PullServerPort
   )
