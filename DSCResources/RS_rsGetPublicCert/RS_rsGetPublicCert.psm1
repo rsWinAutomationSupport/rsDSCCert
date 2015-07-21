@@ -85,7 +85,7 @@ Function Get-TargetResource {
   $nodeinfo = Get-NodeInfo
   
   if(!($PullServerAddress)){ $PullServerAddress = $nodeinfo.PullServerAddress }
-  if(!($PullServerPort)){ $PullServerAddress = $nodeinfo.PullServerPort }
+  if(!($PullServerPort)){ $PullServerPort = $nodeinfo.PullServerPort }
   
   
   return @{
