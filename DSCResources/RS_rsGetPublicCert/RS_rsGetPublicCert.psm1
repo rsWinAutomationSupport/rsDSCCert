@@ -1,20 +1,14 @@
-﻿function Get-NodeInfo {
-$nodeinfo = Get-Content ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString()) -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
-if(!($nodeinfo)){ $nodeinfo = Get-Content 'C:\Windows\Temp\nodeinfo.json' -Raw | ConvertFrom-Json }
-return $nodeinfo
-}
-
-
-
-
-function Update-HOSTS {
+﻿function Update-HOSTS {
 param(
 $oldName,
 $oldIP
 )
 
 
-$nodeinfo = Get-NodeInfo
+$nodeinfopath = ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString())
+if(!($nodeinfopath)) { $nodeinfopath = 'C:\Windows\Temp\nodeinfo.json' }
+                        
+$nodeinfo = Get-Content -Path $nodeinfopath -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
 
 if(!($oldName)){ $oldName = $nodeinfo.PullServerName }
 if(!($oldIP)){ $oldIP = $nodeinfo.PullServerIP }
