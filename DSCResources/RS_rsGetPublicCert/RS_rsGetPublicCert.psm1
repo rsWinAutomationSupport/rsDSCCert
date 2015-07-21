@@ -27,11 +27,15 @@ Set-Content -Path 'C:\Windows\System32\Drivers\etc\hosts' -Value $hostfile -Forc
 }
 
 
-
+<#
 
 function Create-LCMJob {
 
-$nodeinfo = Get-NodeInfo
+
+    $nodeinfopath = ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString())
+    if(!($nodeinfopath)) { $nodeinfopath = 'C:\Windows\Temp\nodeinfo.json' }
+                        
+    $nodeinfo = Get-Content -Path $nodeinfopath -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
 
 $argument = @"
     Configuration LCM
@@ -73,7 +77,7 @@ Register-ScheduledTask -TaskName 'Update-LCM' -User 'System' -Trigger $trigger -
 }
 
 
-
+#>
 
 Function Get-TargetResource {
   param (
@@ -82,18 +86,20 @@ Function Get-TargetResource {
     [int] $PullServerPort
   )
   
-  $nodeinfo = Get-NodeInfo
+    $nodeinfopath = ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString())
+    if(!($nodeinfopath)) { $nodeinfopath = 'C:\Windows\Temp\nodeinfo.json' }
+                        
+    $nodeinfo = Get-Content -Path $nodeinfopath -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
   
-  if(!($PullServerAddress)){ $PullServerAddress = $nodeinfo.PullServerAddress }
-  if(!($PullServerPort)){ $PullServerPort = $nodeinfo.PullServerPort }
+    if(!($PullServerAddress)){ $PullServerAddress = $nodeinfo.PullServerAddress }
+    if(!($PullServerPort)){ $PullServerPort = $nodeinfo.PullServerPort }
   
   
-  return @{
-    'Name' = $Name
-    'PullServerAddress' = $PullServerAddress
-    'PullServerPort' = $PullServerPort
-    
-  }
+    return @{
+        'Name' = $Name
+        'PullServerAddress' = $PullServerAddress
+        'PullServerPort' = $PullServerPort
+    }
 }
 
 
@@ -108,7 +114,10 @@ Function Test-TargetResource {
   
     
         #First check if PullServer Address or Port have changed compared to nodeinfo.json locally
-        $nodeinfo = Get-NodeInfo
+        $nodeinfopath = ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString())
+        if(!($nodeinfopath)) { $nodeinfopath = 'C:\Windows\Temp\nodeinfo.json' }
+                        
+        $nodeinfo = Get-Content -Path $nodeinfopath -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
   
         if($PullServerAddress){
             if($PullServerAddress -ne $nodeinfo.PullServerAddress) {return $false}
@@ -143,8 +152,10 @@ Function Set-TargetResource {
   
         
             #Update PullServer Address and Port in $nodeinfo if changed
+            $nodeinfopath = ([Environment]::GetEnvironmentVariable('nodeInfoPath','Machine').ToString())
+            if(!($nodeinfopath)) { $nodeinfopath = 'C:\Windows\Temp\nodeinfo.json' }
                         
-            $nodeinfo = Get-NodeInfo
+            $nodeinfo = Get-Content -Path $nodeinfopath -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
           
             if($PullServerPort){
                 $nodeinfo.PullServerPort = $PullServerPort
@@ -185,13 +196,14 @@ Function Set-TargetResource {
                     Update-HOSTS -oldName $oldName -oldIP $oldIP
                 }
             }
-          
+            
+            Set-Content -Path $nodeinfopath -Value ($nodeinfo | ConvertTo-Json -Depth 2)
 
             
             
 
             #Ensure LCM is configured correctly. Will create a Scheduled Task to set the LCM 2 minutes after current DSC run finishes
-            Create-LCMJob
+        #    Create-LCMJob
     
 }
 
