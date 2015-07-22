@@ -116,36 +116,34 @@ Function Test-TargetResource {
     [int] $PullServerPort
   )
   
-  if($Ensure -eq 'Present'){
+    if($Ensure -eq 'Present'){
   
-          #First check if PullServer Address or Port have changed compared to nodeinfo.json locally
-          $nodeinfo = Get-NodeInfo
-  
-          if($PullServerAddress){
-                if($PullServerAddress -ne $nodeinfo.PullServerAddress) {return $false}
-          }
+        #First check if PullServer Address or Port have changed compared to nodeinfo.json locally
+        $nodeinfo = Get-NodeInfo
+        if( $PSBoundParameters.ContainsKey('PullServerAddress') ){
+            if($PullServerAddress -ne $nodeinfo.PullServerAddress) {return $false}
+        }
+        if( $PSBoundParameters.ContainsKey('PullServerPort') ){
+            if($PullServerPort -ne $nodeinfo.PullServerPort) {return $false}
+        }
 
-          if($PullServerPort){
-                if($PullServerPort -ne $nodeinfo.PullServerPort) {return $false}
-          }
-
-          #If PullServer Address or Port have not changed, validate that the current PullServer public cert is installed locally
-          $uri = "https://$($nodeinfo.PullServerName):$($nodeinfo.PullServerPort)"
-          $webRequest = [Net.WebRequest]::Create($uri)
+        #If PullServer Address or Port have not changed, validate that the current PullServer public cert is installed locally
+        $uri = "https://$($nodeinfo.PullServerAddress):$($nodeinfo.PullServerPort)"
+        $webRequest = [Net.WebRequest]::Create($uri)
           
-          #catch returns false in case connection times out, this will reset HOSTS entry in Set function
-          try { $webRequest.GetResponse() } catch { return $false }
-          $cert = $webRequest.ServicePoint.Certificate
-          if((Get-ChildItem Cert:\LocalMachine\Root).Thumbprint -contains ($cert.GetCertHashString())) {
+        #catch returns false in case connection times out, this will reset HOSTS entry in Set function
+        try { $webRequest.GetResponse() } catch { }
+        $cert = $webRequest.ServicePoint.Certificate
+        if( (Get-ChildItem Cert:\LocalMachine\Root).Thumbprint -contains ( $cert.GetCertHashString() ) ) {
             return $true
-          }
-          else {
+        }
+        else {
             return $false
-          }
+        }
     }
-
     else { 
-        Write-Verbose -Message "Ensure set to Absent, skipping tests, no action to take" 
+        Write-Verbose -Message "Ensure set to Absent, skipping tests, no action to take"
+        return $true
     }
 }
 
