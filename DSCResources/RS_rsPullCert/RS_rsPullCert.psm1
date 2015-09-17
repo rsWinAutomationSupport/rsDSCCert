@@ -20,7 +20,7 @@ Function Test-TargetResource {
 
   if($RootCertID -eq $SystemCertID) {
     # Checking pull server public certificate file if $PublicKey parameter was specified
-    if ($PublicKey -ne $null) {
+    if ($PublicKey) {
       if (Test-Path $PublicKey) {
         $PublicKeyObj = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
         $PublicKeyObj.Import($PublicKey)
@@ -59,7 +59,7 @@ Function Set-TargetResource {
   $store.Close()
   
   # Export Pulic key to a .cer file for use within local pull DSC encryption, if $PublicKey is provided
-  if (Test-Path variable:local:$PublicKey) {
+  if ($PublicKey) {
     Write-Verbose "Exporting Pull server certificate public key to: $PublicKey"
     (Get-ChildItem Cert:\LocalMachine\My | Where-Object Subject -eq "CN=$PullServerAddress") | Export-Certificate -Type CERT -FilePath $PublicKey -Force
   }
