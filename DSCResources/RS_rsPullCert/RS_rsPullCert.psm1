@@ -58,7 +58,7 @@ Function Set-TargetResource {
       Get-ChildItem -Path Cert:\LocalMachine\Root\ | Where-Object -FilterScript {$_.thumbprint -eq $RootPullCertThumbprint} | Remove-Item
     }
   
-    # Copy the Pull server certificate to the root store
+    Write-Verbose "Copying Pull server certificate to the root store"
     $SourceStoreScope = 'LocalMachine'
     $SourceStorename = 'My'
     
